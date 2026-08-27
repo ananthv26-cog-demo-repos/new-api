@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/types"
 
@@ -77,6 +79,7 @@ type Log struct {
 	Ip                string `json:"ip" gorm:"index;default:''"`
 	RequestId         string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
 	UpstreamRequestId string `json:"upstream_request_id,omitempty" gorm:"type:varchar(128);index:idx_logs_upstream_request_id;default:''"`
+	ClientTag         string `json:"client_tag,omitempty" gorm:"type:varchar(128);index:idx_logs_client_tag;default:''"`
 	Other             string `json:"other"`
 }
 
@@ -91,6 +94,37 @@ const (
 	LogTypeRefund  = 6
 	LogTypeLogin   = 7
 )
+
+// maxClientTagLength bounds the attacker-controlled client tag to the column width.
+const maxClientTagLength = 128
+
+// ClientTagFromRequest derives the FireConnect client tag ("<harness>/<version>")
+// from the attribution headers stamped by the FireConnect CLI, so a gateway log row
+// tells which harness and CLI version produced the request.
+func ClientTagFromRequest(header http.Header) string {
+	if header == nil {
+		return ""
+	}
+	harness := strings.TrimSpace(header.Get(constant.FireconnectHarnessHeader))
+	if harness == "" {
+		return ""
+	}
+	tag := harness
+	if version := strings.TrimSpace(header.Get(constant.FireconnectVersionHeader)); version != "" {
+		tag = harness + "/" + version
+	}
+	if len(tag) > maxClientTagLength {
+		tag = tag[:maxClientTagLength]
+	}
+	return tag
+}
+
+func clientTagFromContext(c *gin.Context) string {
+	if c == nil || c.Request == nil {
+		return ""
+	}
+	return ClientTagFromRequest(c.Request.Header)
+}
 
 func ensureLogRequestId(log *Log) {
 	if log != nil && log.RequestId == "" {
@@ -317,6 +351,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 		}(),
 		RequestId:         requestId,
 		UpstreamRequestId: upstreamRequestId,
+		ClientTag:         clientTagFromContext(c),
 		Other:             otherStr,
 	}
 	err := createLog(log)
@@ -381,6 +416,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		}(),
 		RequestId:         requestId,
 		UpstreamRequestId: upstreamRequestId,
+		ClientTag:         clientTagFromContext(c),
 		Other:             otherStr,
 	}
 	err := createLog(log)
@@ -465,7 +501,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	}
 }
 
-func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
+func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string, clientTag string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB
@@ -487,6 +523,9 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	}
 	if upstreamRequestId != "" {
 		tx = tx.Where("logs.upstream_request_id = ?", upstreamRequestId)
+	}
+	if clientTag != "" {
+		tx = tx.Where("logs.client_tag = ?", clientTag)
 	}
 	if startTimestamp != 0 {
 		tx = tx.Where("logs.created_at >= ?", startTimestamp)
@@ -561,7 +600,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 
 const logSearchCountLimit = 10000
 
-func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
+func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string, clientTag string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB.Where("logs.user_id = ?", userId)
@@ -580,6 +619,9 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	}
 	if upstreamRequestId != "" {
 		tx = tx.Where("logs.upstream_request_id = ?", upstreamRequestId)
+	}
+	if clientTag != "" {
+		tx = tx.Where("logs.client_tag = ?", clientTag)
 	}
 	if startTimestamp != 0 {
 		tx = tx.Where("logs.created_at >= ?", startTimestamp)
