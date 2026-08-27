@@ -134,6 +134,17 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       baseUrl: 'Default: https://api.replicate.com',
     },
   },
+  59: {
+    id: 59,
+    name: CHANNEL_TYPES[59],
+    icon: 'fireworks',
+    defaultBaseUrl: 'https://api.fireworks.ai/inference/v1',
+    hints: {
+      key: 'Fireworks API Key',
+      models: 'accounts/fireworks/models/kimi-k2-instruct',
+      baseUrl: 'Default: https://api.fireworks.ai/inference/v1',
+    },
+  },
   58: {
     id: 58,
     name: CHANNEL_TYPES[58],
