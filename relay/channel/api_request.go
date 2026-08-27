@@ -12,6 +12,7 @@ import (
 	"time"
 
 	common2 "github.com/QuantumNous/new-api/common"
+	constant2 "github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/constant"
@@ -91,6 +92,25 @@ var passthroughSkipHeaderNamesLower = map[string]struct{}{
 	"sec-websocket-key":        {},
 	"sec-websocket-version":    {},
 	"sec-websocket-extensions": {},
+}
+
+// fireconnectHeaderOverrides collects the FireConnect attribution headers
+// (x-fireconnect-*) of an inbound relay request so they are forwarded upstream
+// regardless of the channel header passthrough configuration.
+func fireconnectHeaderOverrides(header http.Header) map[string]string {
+	overrides := make(map[string]string)
+	for name := range header {
+		lower := strings.ToLower(strings.TrimSpace(name))
+		if !strings.HasPrefix(lower, constant2.FireconnectHeaderPrefix) {
+			continue
+		}
+		value := strings.TrimSpace(header.Get(name))
+		if value == "" {
+			continue
+		}
+		overrides[lower] = value
+	}
+	return overrides
 }
 
 var headerPassthroughRegexCache sync.Map // map[string]*regexp.Regexp
@@ -226,6 +246,15 @@ func processHeaderOverride(info *common.RelayInfo, c *gin.Context) (map[string]s
 				return nil, types.NewError(err, types.ErrorCodeChannelHeaderOverrideInvalid)
 			}
 			passthroughRegex = append(passthroughRegex, compiled)
+		}
+	}
+
+	// FireConnect attribution headers are always forwarded upstream, even when the
+	// channel defines no passthrough rule, so the harness id and CLI version survive
+	// the relay hop. Channel overrides below still win.
+	if c != nil && c.Request != nil {
+		for name, value := range fireconnectHeaderOverrides(c.Request.Header) {
+			headerOverride[name] = value
 		}
 	}
 
