@@ -114,7 +114,7 @@ func ClientTagFromRequest(header http.Header) string {
 		tag = harness + "/" + version
 	}
 	if len(tag) > maxClientTagLength {
-		tag = tag[:maxClientTagLength]
+		tag = strings.ToValidUTF8(tag[:maxClientTagLength], "")
 	}
 	return tag
 }

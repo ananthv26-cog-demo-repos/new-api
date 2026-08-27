@@ -63,6 +63,14 @@ func TestClientTagFromRequest(t *testing.T) {
 			want: strings.Repeat("a", maxClientTagLength),
 		},
 		{
+			name: "truncation never splits a multi-byte character",
+			header: http.Header{
+				// The 128-byte cut lands mid-rune: 126 ASCII bytes plus a 3-byte rune.
+				"X-Fireconnect-Harness": {strings.Repeat("a", 126) + strings.Repeat("界", 10)},
+			},
+			want: strings.Repeat("a", 126),
+		},
+		{
 			name:   "nil header",
 			header: nil,
 			want:   "",
