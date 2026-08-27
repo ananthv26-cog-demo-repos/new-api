@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFireconnectHeaderOverrides(t *testing.T) {
@@ -61,7 +62,7 @@ func TestFireconnectHeaderOverrides(t *testing.T) {
 
 func TestFireconnectHeadersSurviveWithoutPassthroughRules(t *testing.T) {
 	req, err := http.NewRequest(http.MethodPost, "https://gateway.example/v1/chat/completions", nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	req.Header.Set("X-FireConnect-Harness", "cursor")
 	req.Header.Set("X-FireConnect-Version", "1.4.2")
 
