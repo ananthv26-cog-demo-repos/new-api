@@ -71,6 +71,13 @@ func TestClientTagFromRequest(t *testing.T) {
 			want: strings.Repeat("a", 126),
 		},
 		{
+			name: "invalid utf-8 is dropped from a short tag",
+			header: http.Header{
+				"X-Fireconnect-Harness": {"cur\xffsor"},
+			},
+			want: "cursor",
+		},
+		{
 			name:   "nil header",
 			header: nil,
 			want:   "",
